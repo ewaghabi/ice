@@ -1,5 +1,5 @@
 CC      ?= clang
-CFLAGS  ?= -std=gnu99 -O2 -Wall -Wextra
+CFLAGS  ?= -std=gnu99 -O3 -flto -march=native -Wall -Wextra
 SOURCES := bitBoardFunc.c busca.c eval.c geraLances.c ice.c init.c make.c mostraTab.c
 
 ice: $(SOURCES)

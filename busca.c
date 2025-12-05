@@ -42,6 +42,7 @@ extern void UnMake(TLance*, TBoard*);
 // eval.c
 extern int  Eval(TBoard*);
 extern int  VerificaXeque(int);
+extern int  popCount(TBitBoard);
 
 // Debug
 extern void MostraTabuleiro(TBoard*);
@@ -53,6 +54,7 @@ extern void ImprimeLance(TLance*, int, TByte, int);
 int   Busca(int, TLance*);
 int   AlphaBeta(int, int, int, TPv*);
 int   Quiescence(int, int, int);
+long  Bench(int, int, long*);
 void  InicializaKillerMoves(void);
 int   AtualizaKillerMoves(TLance*, int);
 void  CopiaLance(TLance*, TLance*);
@@ -110,12 +112,42 @@ int Busca(int tempoBusca, TLance* lance) {
   return flagRetorno;
 }
 
+// ------------------------------------------------------------
+// Bench(): roda AlphaBeta em profundidade fixa N vezes para medir NPS
+long Bench(int profundidade, int repeticoes, long *tempoCentesimos) {
+  int rep, depth;
+  int eval = 0;
+  TPv pv;
+
+  // desativa time-out e zera contadores
+  qtdNos = 0;
+  flagTimeOut = 0;
+  qtdCentesimos = 100000000; // muito grande para nao cortar por tempo
+  InicializaKillerMoves();
+
+  ticks1 = clock();
+  for (rep = 0; rep < repeticoes; rep++) {
+    for (depth = 2; depth <= profundidade; depth++) {
+      maxProfundidade = depth;
+      flagRetorno = flagLanceImpossivel = 0;
+      eval = AlphaBeta(depth, -INFINITO, +INFINITO, &pv);
+      ultimaEval = eval;
+      if (post) ImprimePV(&pv, eval, depth); // mostra PV se post estiver ativo
+    }
+  }
+  ticks2 = clock();
+
+  *tempoCentesimos = (ticks2 - ticks1)/(CLOCKS_PER_SEC/100);
+  return qtdNos;
+}
+
 // ------------------------------------------------------
 // AlphaBeta()
 int AlphaBeta(int profundidade, int alpha, int beta, TPv *pv) {
     int indLanceLista, i, flagXeque = 0;
     int valor, ply, qtdLancesPossiveis;
     TPv pvTemp;
+    static int emNullMove = 0; // evita dois null-move seguidos
 
     // estabelece o ply
     ply = maxProfundidade - profundidade;
@@ -125,7 +157,7 @@ int AlphaBeta(int profundidade, int alpha, int beta, TPv *pv) {
     // verifica final de busca, e chama Quiescence
     if (profundidade == 0) {
       pv->numLances = 0;
-      return Quiescence(-INFINITO, +INFINITO, ply);
+      return Quiescence(alpha, beta, ply);
     }
 
     // verifica time-out
@@ -137,6 +169,8 @@ int AlphaBeta(int profundidade, int alpha, int beta, TPv *pv) {
     flagXeque = VerificaXeque(tabPrincipal.vez);
     // extensao de busca para xeque = 1 ply
 //    if (flagXeque) profundidade++;
+
+    // Null-move pruning desabilitado temporariamente (precisa revisao)
     
     // gera lances, verificando se houve captura do rei (a posicao eh ilegal)
     if (GeraListaLances(ply, MSK_GERA_TODOS, 0, 0)) {
@@ -175,8 +209,10 @@ int AlphaBeta(int profundidade, int alpha, int beta, TPv *pv) {
       if (valor > alpha) {
         alpha = valor;
 
-        AtualizaKillerMoves(&listaLances[indLanceLista], ply); // atualiza KillerMoves        
-        if (valor >= beta) return beta;                      
+        if (valor >= beta) {                                  
+          AtualizaKillerMoves(&listaLances[indLanceLista], ply); // atualiza KillerMoves so em cortes
+          return beta;                      
+        }
         // atualiza PV - cria nova pv com lance feito, seguido da linha (pv) recebida
         CopiaLance(&pv->lances[0],&listaLances[indLanceLista]);                            
         for (i=0;i<(pvTemp.numLances);i++) CopiaLance(&pv->lances[i + 1],&pvTemp.lances[i]);

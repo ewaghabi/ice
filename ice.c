@@ -47,6 +47,7 @@ extern void UnMake(TLance*, TBoard*);
 extern int  Busca(int, TLance*);
 extern int  Quiescence(int, int, int);
 extern int  Quiescence_debug(int, int, int);
+extern long Bench(int, int, long*);
 // bitBoardFunc.c
 extern void setOnebits(void);
 
@@ -210,6 +211,16 @@ int main(int argc, char* argv[])
 			  ladoMotor = BRANCAS;
 			  TrocaTempos();
 			}
+    } else if (!strncmp(strInput, "bench", 5)) { // mede desempenho: bench <profundidade> <repeticoes>
+      int depth = 5, reps = 1;
+      long tempoCentesimos = 0;
+      long nos;
+      sscanf(strInput+6, "%d %d", &depth, &reps);
+      if (depth < 1) depth = 1;
+      if (reps < 1) reps = 1;
+      nos = Bench(depth, reps, &tempoCentesimos);
+      long nps = tempoCentesimos ? (nos * 100) / tempoCentesimos : nos;
+      printf("bench depth=%d reps=%d nos=%ld tempo=%ldcs nps=%ld\n", depth, reps, nos, tempoCentesimos, nps);
 		} else if (!strcmp(strInput, "go")) {       // faz o motor comecar a pensar pelo lado da vez
 			ladoMotor = ptrTabPrincipal->vez;
 		} else if (!strcmp(strInput, "d") || 
