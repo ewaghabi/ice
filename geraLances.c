@@ -40,6 +40,7 @@ int         VerificaXeque(int);
 // protótipos externos
 extern void Fim(int, char*);
 extern void IniciaListaLances(int*, int);
+extern int  historyHeur[2][7][64];
 extern int  BitMenosSignificativo(const TBitBoard);
 extern int  BitMaisSignificativo(const TBitBoard);
 extern int  ComparaLance(TLance*, TLance*);
@@ -547,14 +548,15 @@ int ObtemMelhorLance(int iindListaLance, TLance* lancePV) {
         melhorLance = i;
         break;
       }
-      // verifica killer moves
+      // monta score temporario sem alterar valorLance base
+      int score = listaLances[i].valorLance;
       if (ComparaLance(&killerMoves[iindListaLance][0],&listaLances[i]) ||
           ComparaLance(&killerMoves[iindListaLance][1],&listaLances[i])) {
-        listaLances[i].valorLance += 900;
+        score += 900;
       }
       
-      if (listaLances[i].valorLance > valMelhorLance) {
-        valMelhorLance = listaLances[i].valorLance;
+      if (score > valMelhorLance) {
+        valMelhorLance = score;
         melhorLance = i;
       }
     }

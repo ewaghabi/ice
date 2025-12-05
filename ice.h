@@ -66,7 +66,7 @@ typedef struct {
 
 			TBitBoard   enPassant;
 			TByte       mskRoque[2];
-			TByte	      vez;
+			TByte       vez;
 			int         numLance;
 		 } TBoard;
 

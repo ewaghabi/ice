@@ -24,6 +24,7 @@ int                   maxProfundidade;           // profundidade original
 int                   ultimaEval = 0;            // retorno do AlfaBeta: valor da posicao
 int                   ultimoKiller = 0;          // ultimo killer move substituido 
 TLance                killerMoves[MAX_DEPTH][2]; // dois slots para killer moves (por profundidade)
+int                   historyHeur[2][7][64];     // history heuristic: [lado][peca][destino]
 
 // variaveis para debugacao
 long                    noDebug = -1; //16990; //-1; //= 18050; //-1; // 3898;
@@ -52,16 +53,24 @@ extern void ImprimeLance(TLance*, int, TByte, int);
 
 // prototipos locais
 int   Busca(int, TLance*);
-int   AlphaBeta(int, int, int, TPv*);
+int   AlphaBeta(int, int, int, TPv*, int);
 int   Quiescence(int, int, int);
 long  Bench(int, int, long*);
+void  MakeNull(void);
+void  UnMakeNull(TBitBoard, int, int);
+int   ComparaBoard(TBoard*, TBoard*);
+void  ImprimeDiffBoard(TBoard*, TBoard*);
+int   ChecaEstadoAlphaBeta(int);
 void  InicializaKillerMoves(void);
+void  InicializaHistory(void);
 int   AtualizaKillerMoves(TLance*, int);
 void  CopiaLance(TLance*, TLance*);
 int   ComparaLance(TLance*, TLance*);
 void  ImprimePV(TPv*, int, int);
 void  InicializaTempoBusca(int);
 int   VerificaFimTempoBusca();
+int   MinimaxDebug(int);
+void  TestAlphaBeta(int);
 
 // ----------------------------------------------------
 // Busca()
@@ -72,6 +81,7 @@ int Busca(int tempoBusca, TLance* lance) {
   qtdNos = qtdNos2 = 0;                  // inicializa o contador de nos e o tempo
   InicializaTempoBusca(tempoBusca);      // inicializa tempo
   InicializaKillerMoves();               // inicializa vetor de killer moves
+  InicializaHistory();                   // zera history
   ticks1 = clock();                      // inicializa contador de tempo
 
   // iterative deepening
@@ -80,9 +90,24 @@ int Busca(int tempoBusca, TLance* lance) {
     flagRetorno = flagLanceImpossivel = 0; // flags de comunicacao entre os nos
     flagTimeOut = 0;
     
-    // realiza a busca com janela inicial maior possivel
-    // note que a variante principal e re-enviada a busca para auxiliar a ordenacao de lances
-    eval = AlphaBeta(profundidade, -INFINITO, +INFINITO, &pv);  
+    // Aspiration window em torno do score anterior
+    int janela = 50;
+    int alphaAsp = ultimaEval - janela;
+    int betaAsp  = ultimaEval + janela;
+    // abre a busca e reabre janela se falhar baixo/alto
+    while (1) {
+      eval = AlphaBeta(profundidade, alphaAsp, betaAsp, &pv, 0);  
+      if (eval <= alphaAsp) {
+        alphaAsp -= janela * 2; // expande para baixo
+      } else if (eval >= betaAsp) {
+        betaAsp  += janela * 2; // expande para cima
+      } else {
+        break;
+      }
+      janela *= 2;
+      if (alphaAsp < -INFINITO/2) alphaAsp = -INFINITO;
+      if (betaAsp  >  INFINITO/2) betaAsp  =  INFINITO;
+    }
     // eval = AlphaBeta_debug(profundidade, -INFINITO, +INFINITO, &pv);  
 
     // verifica se a linha possui empate ou mate
@@ -130,7 +155,7 @@ long Bench(int profundidade, int repeticoes, long *tempoCentesimos) {
     for (depth = 2; depth <= profundidade; depth++) {
       maxProfundidade = depth;
       flagRetorno = flagLanceImpossivel = 0;
-      eval = AlphaBeta(depth, -INFINITO, +INFINITO, &pv);
+      eval = AlphaBeta(depth, -INFINITO, +INFINITO, &pv, 0);
       ultimaEval = eval;
       if (post) ImprimePV(&pv, eval, depth); // mostra PV se post estiver ativo
     }
@@ -141,13 +166,89 @@ long Bench(int profundidade, int repeticoes, long *tempoCentesimos) {
   return qtdNos;
 }
 
+// Helpers de null-move (ainda nao usados na busca, servem para isolar estado)
+void MakeNull(void) {
+  tabPrincipal.vez ^= 1;
+  tabPrincipal.enPassant = 0;
+  tabPrincipal.numLance++;
+}
+
+void UnMakeNull(TBitBoard epAnt, int vezAnt, int numLanceAnt) {
+  tabPrincipal.enPassant = epAnt;
+  tabPrincipal.vez = vezAnt;
+  tabPrincipal.numLance = numLanceAnt;
+}
+
+// compara dois tabuleiros completos (retorna 1 se iguais)
+int ComparaBoard(TBoard* a, TBoard* b) {
+  return a->rei[0]     == b->rei[0]     && a->rei[1]     == b->rei[1] &&
+         a->damas[0]   == b->damas[0]   && a->damas[1]   == b->damas[1] &&
+         a->torres[0]  == b->torres[0]  && a->torres[1]  == b->torres[1] &&
+         a->bispos[0]  == b->bispos[0]  && a->bispos[1]  == b->bispos[1] &&
+         a->cavalos[0] == b->cavalos[0] && a->cavalos[1] == b->cavalos[1] &&
+         a->peoes[0]   == b->peoes[0]   && a->peoes[1]   == b->peoes[1] &&
+         a->pecas[0]   == b->pecas[0]   && a->pecas[1]   == b->pecas[1] &&
+         a->enPassant  == b->enPassant &&
+         a->mskRoque[0]== b->mskRoque[0]&& a->mskRoque[1]== b->mskRoque[1] &&
+         a->vez        == b->vez &&
+         a->numLance   == b->numLance;
+}
+
+// imprime diferencas entre tabuleiros
+void ImprimeDiffBoard(TBoard* a, TBoard* b) {
+  if (a->rei[0] != b->rei[0] || a->rei[1] != b->rei[1])
+    printf("rei difere\n");
+  if (a->damas[0] != b->damas[0] || a->damas[1] != b->damas[1])
+    printf("damas difere\n");
+  if (a->torres[0] != b->torres[0] || a->torres[1] != b->torres[1])
+    printf("torres difere\n");
+  if (a->bispos[0] != b->bispos[0] || a->bispos[1] != b->bispos[1])
+    printf("bispos difere\n");
+  if (a->cavalos[0] != b->cavalos[0] || a->cavalos[1] != b->cavalos[1])
+    printf("cavalos difere\n");
+  if (a->peoes[0] != b->peoes[0] || a->peoes[1] != b->peoes[1])
+    printf("peoes difere\n");
+  if (a->pecas[0] != b->pecas[0] || a->pecas[1] != b->pecas[1])
+    printf("pecas difere\n");
+  if (a->enPassant != b->enPassant)
+    printf("enPassant difere\n");
+  if (a->mskRoque[0]!= b->mskRoque[0]|| a->mskRoque[1]!= b->mskRoque[1])
+    printf("mskRoque difere\n");
+  if (a->vez != b->vez)
+    printf("vez difere\n");
+  if (a->numLance != b->numLance)
+    printf("numLance difere\n");
+}
+
+// roda AlphaBeta e checa se estado do tabuleiro voltou igual
+int ChecaEstadoAlphaBeta(int profundidade) {
+  TPv pv;
+  TBoard snapshot = tabPrincipal;
+  int ab;
+
+  maxProfundidade = profundidade;
+  flagRetorno = flagLanceImpossivel = flagTimeOut = 0;
+  qtdCentesimos = 100000000;
+  qtdNos = 0;
+
+  ab = AlphaBeta(profundidade, -INFINITO, +INFINITO, &pv, 0);
+
+  if (!ComparaBoard(&snapshot, &tabPrincipal)) {
+    printf("Drift de estado apos AlphaBeta depth=%d (score %d)\n", profundidade, ab);
+    ImprimeDiffBoard(&snapshot, &tabPrincipal);
+    return 0;
+  }
+  return 1;
+}
+
 // ------------------------------------------------------
 // AlphaBeta()
-int AlphaBeta(int profundidade, int alpha, int beta, TPv *pv) {
+int AlphaBeta(int profundidade, int alpha, int beta, TPv *pv, int fromNull) {
     int indLanceLista, i, flagXeque = 0;
     int valor, ply, qtdLancesPossiveis;
     TPv pvTemp;
-    static int emNullMove = 0; // evita dois null-move seguidos
+    (void)fromNull; // parametro reservado para futura reintroducao de null-move
+    int evalStatic = 0;
 
     // estabelece o ply
     ply = maxProfundidade - profundidade;
@@ -165,12 +266,15 @@ int AlphaBeta(int profundidade, int alpha, int beta, TPv *pv) {
       if (VerificaFimTempoBusca()) 
         return alpha;
 
+    // avalia staticamente para heuristicas (futility)
+    evalStatic = Eval(&tabPrincipal);
+
     // verifica se esta em xeque
     flagXeque = VerificaXeque(tabPrincipal.vez);
     // extensao de busca para xeque = 1 ply
 //    if (flagXeque) profundidade++;
 
-    // Null-move pruning desabilitado temporariamente (precisa revisao)
+    // Null-move pruning desativado (instavel)
     
     // gera lances, verificando se houve captura do rei (a posicao eh ilegal)
     if (GeraListaLances(ply, MSK_GERA_TODOS, 0, 0)) {
@@ -182,7 +286,16 @@ int AlphaBeta(int profundidade, int alpha, int beta, TPv *pv) {
     while ((indLanceLista = ObtemMelhorLance(ply, &pv->lances[ply])) != -1) { // obtem lances um a um, o pv primeiro
       Make(&listaLances[indLanceLista], &tabPrincipal);                    // faz o lance no tabuleiro principal
       flagLanceImpossivel = flagRetorno = 0;                               // inicializa flags de comunicacao
-      valor = -AlphaBeta(profundidade - 1, -beta, -alpha, &pvTemp);        // pesquisa
+      // futility pruning para quiet moves na penultima camada
+      if (profundidade == 1 && !flagXeque && !listaLances[indLanceLista].pecaCapturada && !(listaLances[indLanceLista].especial & MSK_XEQUE)) {
+        int margem = 200;
+        if (evalStatic + margem <= alpha) {
+          UnMake(&listaLances[indLanceLista], &tabPrincipal);
+          continue;
+        }
+      }
+
+      valor = -AlphaBeta(profundidade - 1, -beta, -alpha, &pvTemp, 0);        // pesquisa
       UnMake(&listaLances[indLanceLista], &tabPrincipal);                  // desfaz o lance no tabuleiro principal
       
       // testa flags de comunicacao
@@ -200,7 +313,7 @@ int AlphaBeta(int profundidade, int alpha, int beta, TPv *pv) {
       if (listaLances[indLanceLista].especial & (MSK_MATE | MSK_AFOGADO)) {
         CopiaLance(&pv->lances[0],&listaLances[indLanceLista]);                            
         pv->numLances = 1;
-        return valor;
+        return valor; // fail-soft: retorna valor real
       }
       
       qtdLancesPossiveis++;       // conta lance possivel
@@ -211,7 +324,7 @@ int AlphaBeta(int profundidade, int alpha, int beta, TPv *pv) {
 
         if (valor >= beta) {                                  
           AtualizaKillerMoves(&listaLances[indLanceLista], ply); // atualiza KillerMoves so em cortes
-          return beta;                      
+          return valor; // fail-soft: retorna valor observado                      
         }
         // atualiza PV - cria nova pv com lance feito, seguido da linha (pv) recebida
         CopiaLance(&pv->lances[0],&listaLances[indLanceLista]);                            
@@ -339,6 +452,62 @@ int Quiescence(int alpha, int beta, int ply) {
 } 
 
 // ------------------------------------------------------------
+// MinimaxDebug: minimax/negamax sem poda para checar consistencia
+int MinimaxDebug(int profundidade) {
+    int indLanceLista, melhor = -INFINITO;
+    int ply = maxProfundidade - profundidade;
+    int valor;
+    TLance pvDummy;
+
+    // terminal
+    if (profundidade == 0)
+      return Quiescence(-INFINITO, +INFINITO, ply);
+
+    if (GeraListaLances(ply, MSK_GERA_TODOS, 0, 0)) {
+      flagLanceImpossivel = 1;
+      return 0;
+    }
+
+    while ((indLanceLista = ObtemMelhorLance(ply, &pvDummy)) != -1) {
+      Make(&listaLances[indLanceLista], &tabPrincipal);
+      flagLanceImpossivel = flagRetorno = 0;
+      valor = -MinimaxDebug(profundidade - 1);
+      UnMake(&listaLances[indLanceLista], &tabPrincipal);
+
+      if (flagLanceImpossivel) {
+        flagLanceImpossivel = 0;
+        continue;
+      }
+      if (valor > melhor) melhor = valor;
+    }
+
+    if (melhor == -INFINITO) {
+      // sem lances: mate ou afogado
+      if (VerificaXeque(tabPrincipal.vez)) return -9999;
+      else return 0;
+    }
+    return melhor;
+}
+
+// ------------------------------------------------------------
+// TestAlphaBeta: compara alpha-beta com minimax na profundidade dada
+void TestAlphaBeta(int profundidade) {
+  TPv pv;
+  int ab, mm;
+
+  maxProfundidade = profundidade;
+  flagRetorno = flagLanceImpossivel = flagTimeOut = 0;
+  qtdCentesimos = 100000000;
+  qtdNos = 0;
+  ab = AlphaBeta(profundidade, -INFINITO, +INFINITO, &pv, 0);
+
+  flagRetorno = flagLanceImpossivel = 0;
+  mm = MinimaxDebug(profundidade);
+
+  printf("testab depth=%d ab=%d minimax=%d\n", profundidade, ab, mm);
+}
+
+// ------------------------------------------------------------
 // AtualizaKillerMoves
 // retorno 1: lance ja existente, valor incrementado
 // retorno 0: lance nao existente, incluido no primeiro slot vazio ou de menor valor
@@ -391,6 +560,16 @@ void  InicializaKillerMoves() {
   for (i=0;i<MAX_DEPTH;i++)
     killerMoves[i][0].peca = killerMoves[i][1].peca = 0;
   ultimoKiller = 0;
+}
+
+// ------------------------------------------------------------
+// InicializaHistory()
+void InicializaHistory() {
+  int lado, peca, casa;
+  for (lado = 0; lado < 2; lado++)
+    for (peca = 0; peca < 7; peca++)
+      for (casa = 0; casa < 64; casa++)
+        historyHeur[lado][peca][casa] = 0;
 }
 
 

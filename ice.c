@@ -48,6 +48,11 @@ extern int  Busca(int, TLance*);
 extern int  Quiescence(int, int, int);
 extern int  Quiescence_debug(int, int, int);
 extern long Bench(int, int, long*);
+extern void TestAlphaBeta(int);
+extern int  ComparaBoard(TBoard*, TBoard*);
+extern void MakeNull(void);
+extern void UnMakeNull(TBitBoard, int, int);
+extern int  ChecaEstadoAlphaBeta(int);
 // bitBoardFunc.c
 extern void setOnebits(void);
 
@@ -206,11 +211,11 @@ int main(int argc, char* argv[])
 			  ladoMotor = NEGRAS;
 			  TrocaTempos();
 			}
-		} else if (!strcmp(strInput, "black")) {    // define que o jogador (oponente) jogara pelas brancas
-		  if (ladoMotor != BRANCAS) {
-			  ladoMotor = BRANCAS;
-			  TrocaTempos();
-			}
+    } else if (!strcmp(strInput, "black")) {    // define que o jogador (oponente) jogara pelas brancas
+      if (ladoMotor != BRANCAS) {
+        ladoMotor = BRANCAS;
+        TrocaTempos();
+      }
     } else if (!strncmp(strInput, "bench", 5)) { // mede desempenho: bench <profundidade> <repeticoes>
       int depth = 5, reps = 1;
       long tempoCentesimos = 0;
@@ -221,10 +226,32 @@ int main(int argc, char* argv[])
       nos = Bench(depth, reps, &tempoCentesimos);
       long nps = tempoCentesimos ? (nos * 100) / tempoCentesimos : nos;
       printf("bench depth=%d reps=%d nos=%ld tempo=%ldcs nps=%ld\n", depth, reps, nos, tempoCentesimos, nps);
-		} else if (!strcmp(strInput, "go")) {       // faz o motor comecar a pensar pelo lado da vez
-			ladoMotor = ptrTabPrincipal->vez;
-		} else if (!strcmp(strInput, "d") || 
-		           !strcmp(strInput, "diagrama")) { // imprime o tabuleiro atual na tela
+    } else if (!strncmp(strInput, "testab", 6)) { // compara alpha-beta x minimax: testab <profundidade>
+      int depth = 4;
+      sscanf(strInput+7, "%d", &depth);
+      if (depth < 1) depth = 1;
+      TestAlphaBeta(depth);
+    } else if (!strcmp(strInput, "testnull")) { // valida MakeNull/UnMakeNull
+      TBoard snapshot = tabPrincipal;
+      TBitBoard epAnt = tabPrincipal.enPassant;
+      int vezAnt = tabPrincipal.vez;
+      int numAnt = tabPrincipal.numLance;
+      MakeNull();
+      UnMakeNull(epAnt, vezAnt, numAnt);
+      if (ComparaBoard(&snapshot, &tabPrincipal))
+        printf("testnull ok\n");
+      else
+        printf("testnull falhou\n");
+    } else if (!strncmp(strInput, "checkstate", 10)) { // checa drift de estado apos alpha-beta
+      int depth = 4;
+      sscanf(strInput+11, "%d", &depth);
+      if (depth < 1) depth = 1;
+      if (ChecaEstadoAlphaBeta(depth))
+        printf("checkstate ok\n");
+    } else if (!strcmp(strInput, "go")) {       // faz o motor comecar a pensar pelo lado da vez
+    	ladoMotor = ptrTabPrincipal->vez;
+			} else if (!strcmp(strInput, "d") || 
+			           !strcmp(strInput, "diagrama")) { // imprime o tabuleiro atual na tela
 			MostraTabuleiro(ptrTabPrincipal);
 /*			printf("Teste BitMenosSignificativo pecas negras : %d\n",BitMenosSignificativo(tabPrincipal.pecas[NEGRAS]));
 //			printf("Teste BitMenosSignificativo pecas brancas: %d\n",BitMenosSignificativo(tabPrincipal.pecas[BRANCAS]));
