@@ -64,6 +64,8 @@ int GeraListaLances(int iindListaLances, int tipoGeracao, int valorQuiesc, int c
   TBitBoard pecasVez      = tabPrincipal.pecas[tabPrincipal.vez];
   TBitBoard pecasOponente = tabPrincipal.pecas[vezOponente];
   TBitBoard todasPecas    = pecasVez | pecasOponente;
+  int      dirFrente      = tabPrincipal.vez ? 8 : -8;
+  int      dirDuplo       = dirFrente << 1;
   
 
   // Inicializa lista de lances a partir do indice informado
@@ -72,39 +74,49 @@ int GeraListaLances(int iindListaLances, int tipoGeracao, int valorQuiesc, int c
   if (tabPrincipal.peoes[tabPrincipal.vez]) {
     bbPeca = tabPrincipal.peoes[tabPrincipal.vez];
     while (bbPeca) {
-      casaOrigem = BitMenosSignificativo(bbPeca);
+      casaOrigem = __builtin_ctzll(bbPeca);
+      TBitBoard maskOrig = mskBitBoardUnitario[casaOrigem];
       // capturas
       bbLance = mskBitBoardAtaquesPeao[tabPrincipal.vez][casaOrigem] & pecasOponente;
-      if (IdentificaLances(bbLance, iindListaLances, PEAO, casaOrigem, tipoGeracao, valorQuiesc, casaUltCaptura))
+      if (bbLance && IdentificaLances(bbLance, iindListaLances, PEAO, casaOrigem, tipoGeracao, valorQuiesc, casaUltCaptura))
         return 1; // avisa captura de rei
 
       // demais lances (apenas para geração completa)
       if (tipoGeracao & MSK_GERA_TODOS) {
         bbLance = mskBitBoardLancesPeao[tabPrincipal.vez][casaOrigem] & ~todasPecas;
-        IdentificaLances(bbLance, iindListaLances, PEAO, casaOrigem, tipoGeracao, valorQuiesc, casaUltCaptura);
+        if (bbLance)
+          IdentificaLances(bbLance, iindListaLances, PEAO, casaOrigem, tipoGeracao, valorQuiesc, casaUltCaptura);
         
         // verifica se peao pode andar duas casas
-        if (mskBitBoardUnitario[casaOrigem] & mskBitBoardInitPeao[tabPrincipal.vez]) {
-          if (!(mskBitBoardUnitario[casaOrigem + (tabPrincipal.vez ? 8 : -8)] & todasPecas) &&
-              !(mskBitBoardUnitario[casaOrigem + (tabPrincipal.vez ? 16 : -16)] & todasPecas)) {
-            bbLance = mskBitBoardUnitario[casaOrigem + (tabPrincipal.vez ? 16 : -16)];
-            IdentificaLances(bbLance, iindListaLances, PEAO, casaOrigem, tipoGeracao, valorQuiesc, casaUltCaptura);                
+        if (maskOrig & mskBitBoardInitPeao[tabPrincipal.vez]) {
+          int casaFrente = casaOrigem + dirFrente;
+          int casaDupla  = casaOrigem + dirDuplo;
+          TBitBoard maskFrente = mskBitBoardUnitario[casaFrente];
+          if (!(maskFrente & todasPecas)) {
+            TBitBoard maskDupla = mskBitBoardUnitario[casaDupla];
+            if (!(maskDupla & todasPecas)) {
+              bbLance = maskDupla;
+              IdentificaLances(bbLance, iindListaLances, PEAO, casaOrigem, tipoGeracao, valorQuiesc, casaUltCaptura);                
+            }
           }
         }
       }
 
       // verifica captura en passant
-      if (indListaLancesJogados)
-        if (listaLancesJogados[indListaLancesJogados-1].peca == PEAO)
-          if (abs(listaLancesJogados[indListaLancesJogados-1].casaDestino - listaLancesJogados[indListaLancesJogados-1].casaOrigem) > 9 &&
-             (listaLancesJogados[indListaLancesJogados-1].casaDestino == casaOrigem + 1 || listaLancesJogados[indListaLancesJogados-1].casaDestino == casaOrigem - 1)) 
-            if (!(tipoGeracao & MSK_QUIESCENCE) || ((tipoGeracao & MSK_QUIESCENCE) && (PEAO >= valorQuiesc) )) {
-              casaDestino = listaLancesJogados[indListaLancesJogados-1].casaDestino + (tabPrincipal.vez ? 8 : -8);
-              GeraLance(iindListaLances, PEAO, casaOrigem, casaDestino, MSK_ENPASSANT, 0, PEAO, valorPecas[PEAO]);      
-            }
+      if (indListaLancesJogados) {
+        TLance *ultimo = &listaLancesJogados[indListaLancesJogados-1];
+        int ultOrigem  = ultimo->casaOrigem;
+        int ultDestino = ultimo->casaDestino;
+        int delta      = ultDestino - ultOrigem;
+        if (ultimo->peca == PEAO && delta > 9 && (ultDestino == casaOrigem + 1 || ultDestino == casaOrigem - 1))
+          if (!(tipoGeracao & MSK_QUIESCENCE) || ((tipoGeracao & MSK_QUIESCENCE) && (PEAO >= valorQuiesc) )) {
+            casaDestino = ultDestino + dirFrente;
+            GeraLance(iindListaLances, PEAO, casaOrigem, casaDestino, MSK_ENPASSANT, 0, PEAO, valorPecas[PEAO]);      
+          }
+      }
           
       // retira casaOrigem do bitboard de peças
-      bbPeca ^= mskBitBoardUnitario[casaOrigem];
+      bbPeca &= bbPeca - 1;
     }
   }
 
@@ -112,19 +124,20 @@ int GeraListaLances(int iindListaLances, int tipoGeracao, int valorQuiesc, int c
   if (tabPrincipal.cavalos[tabPrincipal.vez]) {
     bbPeca = tabPrincipal.cavalos[tabPrincipal.vez];
     while (bbPeca) {
-      casaOrigem = BitMenosSignificativo(bbPeca);
+      casaOrigem = __builtin_ctzll(bbPeca);
       // capturas
       bbLance = mskBitBoardLancesCavalo[casaOrigem] & ~pecasVez & pecasOponente;
-      if (IdentificaLances(bbLance, iindListaLances, CAVALO, casaOrigem, tipoGeracao, valorQuiesc, casaUltCaptura))
+      if (bbLance && IdentificaLances(bbLance, iindListaLances, CAVALO, casaOrigem, tipoGeracao, valorQuiesc, casaUltCaptura))
         return 1; // avisa captura de rei
 
       // demais lances (apenas para geração completa)
       if (tipoGeracao & MSK_GERA_TODOS) {
         bbLance = mskBitBoardLancesCavalo[casaOrigem] & ~pecasVez & ~pecasOponente;
-        IdentificaLances(bbLance, iindListaLances, CAVALO, casaOrigem, tipoGeracao, valorQuiesc, casaUltCaptura);
+        if (bbLance)
+          IdentificaLances(bbLance, iindListaLances, CAVALO, casaOrigem, tipoGeracao, valorQuiesc, casaUltCaptura);
       }
       // retira casaOrigem do bitboard de peças
-      bbPeca ^= mskBitBoardUnitario[casaOrigem];
+      bbPeca &= bbPeca - 1;
     }
   }
     
@@ -132,13 +145,14 @@ int GeraListaLances(int iindListaLances, int tipoGeracao, int valorQuiesc, int c
   casaOrigem = BitMenosSignificativo(tabPrincipal.rei[tabPrincipal.vez]);
   // capturas
   bbLance = mskBitBoardLancesRei[casaOrigem] & ~pecasVez & pecasOponente;
-  if (IdentificaLances(bbLance, iindListaLances, REI, casaOrigem, tipoGeracao, valorQuiesc, casaUltCaptura))
+  if (bbLance && IdentificaLances(bbLance, iindListaLances, REI, casaOrigem, tipoGeracao, valorQuiesc, casaUltCaptura))
     return 1; // identifica captura do rei
   
   // demais lances do rei (apenas para geração completa)
   if (tipoGeracao & MSK_GERA_TODOS) {
     bbLance = mskBitBoardLancesRei[casaOrigem] & ~pecasVez & ~pecasOponente;
-    IdentificaLances(bbLance, iindListaLances, REI, casaOrigem, tipoGeracao, valorQuiesc, casaUltCaptura);
+    if (bbLance)
+      IdentificaLances(bbLance, iindListaLances, REI, casaOrigem, tipoGeracao, valorQuiesc, casaUltCaptura);
     
     // roques
     if (!tabPrincipal.mskRoque[tabPrincipal.vez]) { // se ainda nao rocou
@@ -157,7 +171,7 @@ int GeraListaLances(int iindListaLances, int tipoGeracao, int valorQuiesc, int c
   if (tabPrincipal.bispos[tabPrincipal.vez]) {
     bbPeca = tabPrincipal.bispos[tabPrincipal.vez];
     while (bbPeca) {
-      casaOrigem = BitMenosSignificativo(bbPeca);
+      casaOrigem = __builtin_ctzll(bbPeca);
       bbCapturas = bbLance = 0x00;
       // raio 1: diagonal NE 
       if (mskBitBoardDesliz[1][casaOrigem]) {
@@ -184,17 +198,17 @@ int GeraListaLances(int iindListaLances, int tipoGeracao, int valorQuiesc, int c
         bbCapturas |= bbLance & pecasOponente;
       }
       // capturas
-      if (IdentificaLances(bbCapturas, iindListaLances, BISPO, casaOrigem, tipoGeracao, valorQuiesc, casaUltCaptura)) 
+      if (bbCapturas && IdentificaLances(bbCapturas, iindListaLances, BISPO, casaOrigem, tipoGeracao, valorQuiesc, casaUltCaptura)) 
         return 1; // captura de rei
       // demais lances
       if (tipoGeracao & MSK_GERA_TODOS) {
         // retirando as capturas dos lances
         bbLance &= ~todasPecas;
-        if (IdentificaLances(bbLance, iindListaLances, BISPO, casaOrigem, tipoGeracao, valorQuiesc, casaUltCaptura)) 
+        if (bbLance && IdentificaLances(bbLance, iindListaLances, BISPO, casaOrigem, tipoGeracao, valorQuiesc, casaUltCaptura)) 
           return 1; // captura de rei
       }
       // retira casaOrigem do bitboard de peças
-      bbPeca ^= mskBitBoardUnitario[casaOrigem];
+      bbPeca &= bbPeca - 1;
     }
   }
 
@@ -203,7 +217,7 @@ int GeraListaLances(int iindListaLances, int tipoGeracao, int valorQuiesc, int c
   if (tabPrincipal.torres[tabPrincipal.vez]) {
     bbPeca = tabPrincipal.torres[tabPrincipal.vez];
     while (bbPeca) {
-      casaOrigem = BitMenosSignificativo(bbPeca);
+      casaOrigem = __builtin_ctzll(bbPeca);
       bbCapturas = bbLance = 0x00;
       // raio 0: coluna N 
       if (mskBitBoardDesliz[0][casaOrigem]) {
@@ -230,17 +244,17 @@ int GeraListaLances(int iindListaLances, int tipoGeracao, int valorQuiesc, int c
         bbCapturas |= bbLance & pecasOponente;
       }
       // capturas
-      if (IdentificaLances(bbCapturas, iindListaLances, TORRE, casaOrigem, tipoGeracao, valorQuiesc, casaUltCaptura)) 
+      if (bbCapturas && IdentificaLances(bbCapturas, iindListaLances, TORRE, casaOrigem, tipoGeracao, valorQuiesc, casaUltCaptura)) 
         return 1; // captura de rei
       // demais lances
       if (tipoGeracao & MSK_GERA_TODOS) {
         // retirando as capturas dos lances
         bbLance &= ~todasPecas;
-        if (IdentificaLances(bbLance, iindListaLances, TORRE, casaOrigem, tipoGeracao, valorQuiesc, casaUltCaptura)) 
+        if (bbLance && IdentificaLances(bbLance, iindListaLances, TORRE, casaOrigem, tipoGeracao, valorQuiesc, casaUltCaptura)) 
           return 1; // captura de rei
       }
       // retira casaOrigem do bitboard de peças
-      bbPeca ^= mskBitBoardUnitario[casaOrigem];
+      bbPeca &= bbPeca - 1;
     }
   }
     
@@ -248,7 +262,7 @@ int GeraListaLances(int iindListaLances, int tipoGeracao, int valorQuiesc, int c
   if (tabPrincipal.damas[tabPrincipal.vez]) {
     bbPeca = tabPrincipal.damas[tabPrincipal.vez];
     while (bbPeca) {
-      casaOrigem = BitMenosSignificativo(bbPeca);
+      casaOrigem = __builtin_ctzll(bbPeca);
       bbCapturas = bbLance = 0x00;
       // raio 0: coluna N 
       if (mskBitBoardDesliz[0][casaOrigem]) {
@@ -299,17 +313,17 @@ int GeraListaLances(int iindListaLances, int tipoGeracao, int valorQuiesc, int c
         bbCapturas |= bbLance & pecasOponente;
       }
       // capturas
-      if (IdentificaLances(bbCapturas, iindListaLances, DAMA, casaOrigem, tipoGeracao, valorQuiesc, casaUltCaptura)) 
+      if (bbCapturas && IdentificaLances(bbCapturas, iindListaLances, DAMA, casaOrigem, tipoGeracao, valorQuiesc, casaUltCaptura)) 
         return 1; // captura de rei
       // demais lances
       if (tipoGeracao & MSK_GERA_TODOS) {
         // retirando as capturas dos lances
         bbLance &= ~todasPecas;
-        if (IdentificaLances(bbLance, iindListaLances, DAMA, casaOrigem, tipoGeracao, valorQuiesc, casaUltCaptura)) 
+        if (bbLance && IdentificaLances(bbLance, iindListaLances, DAMA, casaOrigem, tipoGeracao, valorQuiesc, casaUltCaptura)) 
           return 1; // captura de rei
       }
       // retira casaOrigem do bitboard de peças
-      bbPeca ^= mskBitBoardUnitario[casaOrigem];
+      bbPeca &= bbPeca - 1;
     }
   }
 
@@ -321,27 +335,37 @@ int GeraListaLances(int iindListaLances, int tipoGeracao, int valorQuiesc, int c
 int IdentificaLances(TBitBoard bbLance, int iindListaLances, TByte peca, TByte casaOrigem, int tipoGeracao, int valorQuiesc, int casaUltCaptura) {
   int   valorLance, casaDestino;
   int   vezOponente = (tabPrincipal.vez)^1;
+  TBitBoard oppAll     = tabPrincipal.pecas[vezOponente];
+  TBitBoard oppPawns   = tabPrincipal.peoes[vezOponente];
+  TBitBoard oppKnights = tabPrincipal.cavalos[vezOponente];
+  TBitBoard oppBishops = tabPrincipal.bispos[vezOponente];
+  TBitBoard oppRooks   = tabPrincipal.torres[vezOponente];
+  TBitBoard oppQueens  = tabPrincipal.damas[vezOponente];
+  TBitBoard oppKing    = tabPrincipal.rei[vezOponente];
   TByte pecaCapturada, pecaPromovida;
 
   while (bbLance) {
-    casaDestino = BitMenosSignificativo(bbLance);
+    casaDestino = __builtin_ctzll(bbLance);
     pecaCapturada = 0;
     valorLance = 0;
+    TBitBoard maskCasa = mskBitBoardUnitario[casaDestino];
     // identifica peça capturada       
-    if (tabPrincipal.peoes[vezOponente] & (mskBitBoardUnitario[casaDestino])) 
-      pecaCapturada = PEAO;
-    else if (tabPrincipal.cavalos[vezOponente] & (mskBitBoardUnitario[casaDestino])) 
-      pecaCapturada = CAVALO;
-    else if (tabPrincipal.bispos[vezOponente] & (mskBitBoardUnitario[casaDestino])) 
-      pecaCapturada = BISPO;
-    else if (tabPrincipal.torres[vezOponente] & (mskBitBoardUnitario[casaDestino])) 
-      pecaCapturada = TORRE;
-    else if (tabPrincipal.damas[vezOponente] & (mskBitBoardUnitario[casaDestino])) 
-      pecaCapturada = DAMA;
-    else if (tabPrincipal.rei[vezOponente] & (mskBitBoardUnitario[casaDestino])) 
-      return 1; // avisa captura do rei - posição não é legal
-   
- 	  // Calcula o valor da captura
+    if (oppAll & maskCasa) {
+      if (oppPawns & maskCasa) 
+        pecaCapturada = PEAO;
+      else if (oppKnights & maskCasa) 
+        pecaCapturada = CAVALO;
+      else if (oppBishops & maskCasa) 
+        pecaCapturada = BISPO;
+      else if (oppRooks & maskCasa) 
+        pecaCapturada = TORRE;
+      else if (oppQueens & maskCasa) 
+        pecaCapturada = DAMA;
+      else if (oppKing & maskCasa) 
+        return 1; // avisa captura do rei - posição não é legal
+    }
+
+    // Calcula o valor da captura
     valorLance = (valorPecas[pecaCapturada] * 100) / valorPecas[peca];
 
     // Gera promocoes ou lances
@@ -354,7 +378,7 @@ int IdentificaLances(TBitBoard bbLance, int iindListaLances, TByte peca, TByte c
     }
 
     // Retira casaDestino do bitboard de lances
-    bbLance ^= mskBitBoardUnitario[casaDestino];
+    bbLance &= bbLance - 1;
   }
   return 0;
 }
