@@ -25,43 +25,69 @@ int Eval(TBoard* tab) {
   int ocupacaoColunasTorres[2][8] = {{0}};  
   int ocupacaoColunasRei[2][8]    = {{0}};  
  
+  // percorre peças por bitboard (evita varrer as 64 casas)
   for (bando=(tab->vez)^1;;bando^=1) {
-    numPeoes[bando] = 0;
+    numPeoes[bando]   = 0;
     numCavalos[bando] = 0;
-    numBispos[bando] = 0;
-    numTorres[bando] = 0;
-    numDamas[bando] = 0;
-    
-    for (i=0;i<64;i++) {
-      if (tab->pecas[bando] & mskBitBoardUnitario[i]) {
-        if (tab->peoes[bando] & mskBitBoardUnitario[i]) {
-          ocupacaoColunasPeoes[bando][i&7]++;
-          valorPosicao[bando] += valorPecas[PEAO] + ValorPosicao(PEAO, i, bando, tab->numLance);
-          numPeoes[bando]++;
-        }
-        if (tab->cavalos[bando] & mskBitBoardUnitario[i]) {
-          valorPosicao[bando] += valorPecas[CAVALO] + ValorPosicao(CAVALO, i, bando, tab->numLance);
-          numCavalos[bando]++;
-        }
-        if (tab->bispos[bando] & mskBitBoardUnitario[i]) {
-          valorPosicao[bando] += valorPecas[BISPO] + ValorPosicao(BISPO, i, bando, tab->numLance);
-          numBispos[bando]++;
-        }
-        if (tab->torres[bando] & mskBitBoardUnitario[i]) {
-          valorPosicao[bando] += valorPecas[TORRE] + ValorPosicao(TORRE, i, bando, tab->numLance);
-          ocupacaoColunasTorres[bando][i&7]++;
-          numTorres[bando]++;
-        }
-        if (tab->damas[bando] & mskBitBoardUnitario[i]) {
-          valorPosicao[bando] += valorPecas[DAMA] + ValorPosicao(DAMA, i, bando, tab->numLance);
-          numDamas[bando]++;
-        }
-        if (tab->rei[bando] & mskBitBoardUnitario[i]) {
-          valorPosicao[bando] += valorPecas[REI] + ValorPosicao(REI, i, bando, tab->numLance);
-          ocupacaoColunasRei[bando][i&7]++;
-        }
-      }
+    numBispos[bando]  = 0;
+    numTorres[bando]  = 0;
+    numDamas[bando]   = 0;
+
+    TBitBoard bb;
+    // Peoes
+    bb = tab->peoes[bando];
+    while (bb) {
+      int sq = __builtin_ctzll(bb);
+      int file = sq & 7;
+      ocupacaoColunasPeoes[bando][file]++;
+      valorPosicao[bando] += valorPecas[PEAO] + ValorPosicao(PEAO, sq, bando, tab->numLance);
+      numPeoes[bando]++;
+      bb &= bb - 1;
     }
+    // Cavalos
+    bb = tab->cavalos[bando];
+    while (bb) {
+      int sq = __builtin_ctzll(bb);
+      valorPosicao[bando] += valorPecas[CAVALO] + ValorPosicao(CAVALO, sq, bando, tab->numLance);
+      numCavalos[bando]++;
+      bb &= bb - 1;
+    }
+    // Bispos
+    bb = tab->bispos[bando];
+    while (bb) {
+      int sq = __builtin_ctzll(bb);
+      valorPosicao[bando] += valorPecas[BISPO] + ValorPosicao(BISPO, sq, bando, tab->numLance);
+      numBispos[bando]++;
+      bb &= bb - 1;
+    }
+    // Torres
+    bb = tab->torres[bando];
+    while (bb) {
+      int sq = __builtin_ctzll(bb);
+      int file = sq & 7;
+      valorPosicao[bando] += valorPecas[TORRE] + ValorPosicao(TORRE, sq, bando, tab->numLance);
+      ocupacaoColunasTorres[bando][file]++;
+      numTorres[bando]++;
+      bb &= bb - 1;
+    }
+    // Damas
+    bb = tab->damas[bando];
+    while (bb) {
+      int sq = __builtin_ctzll(bb);
+      valorPosicao[bando] += valorPecas[DAMA] + ValorPosicao(DAMA, sq, bando, tab->numLance);
+      numDamas[bando]++;
+      bb &= bb - 1;
+    }
+    // Reis
+    bb = tab->rei[bando];
+    while (bb) {
+      int sq = __builtin_ctzll(bb);
+      int file = sq & 7;
+      valorPosicao[bando] += valorPecas[REI] + ValorPosicao(REI, sq, bando, tab->numLance);
+      ocupacaoColunasRei[bando][file]++;
+      bb &= bb - 1;
+    }
+
     if (bando==tab->vez) break;
   }
   
