@@ -2,6 +2,8 @@
 // geraLances.c
 // Funções de geração de lances
 #include "ice.h"
+#include <stdlib.h>
+#include <stdio.h>
 
 // Variáveis globais
 // locais
@@ -54,11 +56,8 @@ extern void MostraBitBoard(TBitBoard);
 //                                    capturas realizadas na "casaUltCaptura" (recapturas) são geradas.
 int GeraListaLances(int iindListaLances, int tipoGeracao, int valorQuiesc, int casaUltCaptura) {
 
-  TByte     pecaCapturada;
-  TByte     pecaPromovida;
-  int       valorLance;
-  int       raio, casaOrigem = 0;
-  int       primBit, permissaoRoque, casaDestino, lance, i;
+  int       casaOrigem = 0;
+  int       primBit = 0, permissaoRoque = 0, casaDestino = 0;
   int       vezOponente = (tabPrincipal.vez)^1;
   TBitBoard bbPeca, bbLance, bbCapturas;
   TBitBoard pecasVez      = tabPrincipal.pecas[tabPrincipal.vez];
@@ -141,12 +140,15 @@ int GeraListaLances(int iindListaLances, int tipoGeracao, int valorQuiesc, int c
     IdentificaLances(bbLance, iindListaLances, REI, casaOrigem, tipoGeracao, valorQuiesc, casaUltCaptura);
     
     // roques
-    if (!tabPrincipal.mskRoque[tabPrincipal.vez]) // se ainda não rocou
-      if (permissaoRoque = VerificaRoque(tabPrincipal.vez)) 
-        if (permissaoRoque & MSK_ROQUEP) 
+    if (!tabPrincipal.mskRoque[tabPrincipal.vez]) { // se ainda nao rocou
+      if ((permissaoRoque = VerificaRoque(tabPrincipal.vez))) {
+        if (permissaoRoque & MSK_ROQUEP) {
           GeraLance(iindListaLances, REI, casaOrigem, casaOrigem + 2, MSK_ROQUEP, 0, 0, 400); // gera roque pequeno
-        else
+        } else {
           GeraLance(iindListaLances, REI, casaOrigem, casaOrigem - 2, MSK_ROQUEG, 0, 0, 300); // gera roque grande
+        }
+      }
+    }
   }
 
   // Pecas deslizantes
@@ -445,8 +447,7 @@ void GeraLance(int iindListaLances, TByte peca, TByte casaOrigem, TByte casaDest
 // -----------------------------------------------------------------------------------
 // InicializaMaskLances()
 void InicializaMaskLances() {
-  int       casaOrigem, casaDestino, raio, vez;
-  int       lancesRei[8]   = {-9, -8, -7, -1, 1, 7, 8, 9}; 
+  int       casaOrigem, casaDestino, raio;
   int       raios[8]   = {-8, -7, 1, 9, 8, 7, -1, -9};   
   int       lancesCavalo[8] = {-17, -15, -10, -6, 6, 10, 15, 17};  
   TBitBoard msk = 0x01;
@@ -577,7 +578,7 @@ int VerificaRoque(int vez) {
   int       lancesCavalo[8] = {-17, -15, -10, -6, 6, 10, 15, 17};
   int       diagonais[4]    = {-9, 7, -7, 9};
   int       linhas[4]       = {-1, -8, 8, 1};
-  int       casaDestino, casaOrigem, casa;
+  int       casaDestino, casaOrigem;
   int       casaOrigemRoque[2]       = {60, 4};
   int       casaOrigemTorreRoqueP[2] = {63, 7};
   int       casaOrigemTorreRoqueG[2] = {56, 0};  
@@ -693,7 +694,7 @@ int VerificaXeque(int vez) {
   int       lancesCavalo[8] = {-17, -15, -10, -6, 6, 10, 15, 17};
   int       diagonais[4]    = {-9, 7, -7, 9};
   int       linhas[4]       = {-1, -8, 8, 1};
-  int       casaDestino, casaOrigem, casa, casaRei;
+  int       casaDestino, casaOrigem, casaRei;
   int       lance, diagonal, linha, i;
   int       bandoOposto     = vez^1;
   TBitBoard todasPecas = tabPrincipal.pecas[BRANCAS] | tabPrincipal.pecas[NEGRAS];

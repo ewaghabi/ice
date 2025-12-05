@@ -23,7 +23,6 @@ extern int indListaLances[40];
 void IniciaTabuleiro(char* posicao, TBoard* tab, TByte vez, TByte roqueB, TByte roqueN ) {
 
 	int casa       = 0;
-	int i          = 0;
 	TBitBoard peca = 0x01;
 
   tab->peoes[NEGRAS]   = tab->peoes[BRANCAS]   = 0x00;
@@ -60,6 +59,9 @@ void IniciaTabuleiro(char* posicao, TBoard* tab, TByte vez, TByte roqueB, TByte 
 	tab->numLance = 1;
 	tab->mskRoque[BRANCAS] = 0; //= roqueB;
 	tab->mskRoque[NEGRAS]  = 0; //= roqueN;
+
+    (void)roqueB;
+    (void)roqueN;
 
 	// reinicializa lista de lances gerados e jogados
 	IniciaListaLances(&indListaLances[0],0);  

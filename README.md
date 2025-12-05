@@ -50,4 +50,4 @@ Motor UCI/XBoard escrito em C durante a graduação, usando bitboards, busca alf
 - Opcional: implementar UCI ou manter apenas xboard.
 
 ## Crédito original
-Motor de xadrez ICE por Iury Lazosky, Cyntia Morais e Eduardo Waghabi. Versão indicada no código: 1.40.
+Motor de xadrez ICE por Eduardo Waghabi. Versão indicada no código: 1.40.

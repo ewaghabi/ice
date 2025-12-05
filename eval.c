@@ -19,11 +19,11 @@ int ValorPosicao(TByte, int, int, int);
 // ----------------------------------------------------------------
 // Eval()
 int Eval(TBoard* tab) {
-  int i, j, bando, flagRoque, oldValorPosicao, valorPosicao[2] = {0, 0};
+  int i, bando, flagRoque, oldValorPosicao, valorPosicao[2] = {0, 0};
   int numBispos[2], numTorres[2], numDamas[2], numPeoes[2], numCavalos[2];
-  int ocupacaoColunasPeoes[2][8]  = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-  int ocupacaoColunasTorres[2][8] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};  
-  int ocupacaoColunasRei[2][8]    = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};  
+  int ocupacaoColunasPeoes[2][8]  = {{0}};
+  int ocupacaoColunasTorres[2][8] = {{0}};  
+  int ocupacaoColunasRei[2][8]    = {{0}};  
  
   for (bando=(tab->vez)^1;;bando^=1) {
     numPeoes[bando] = 0;

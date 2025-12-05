@@ -1,8 +1,10 @@
 #include "ice.h"
 #include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 #include <time.h>
 
-// variáveis globais
+// variaveis globais
 TBoard           tabPrincipal;
 char             simboloPecas[7] = {0, 0, 'N', 'B', 'R', 'Q', 'K'};
 char             simboloPecasPromocao[7] = {' ', 0, 'n', 'b', 'r', 'q'};
@@ -14,20 +16,20 @@ int              indListaLancesJogados = 0;
 TBitBoard        mskBitBoardUnitario[64];
 int              ladoMotor = NEGRAS; // lado que o ICE esta jogando
 int              post = 0;           // flag utilizada para imprimir pv
-int              controleTempo = 0;  // número de lances até o próximo controle de tempo
+int              controleTempo = 0;  // numero de lances ate o proximo controle de tempo
 int              incrementoTempo = 0;// quantidade de segundos recebidos por lance
-long             tempoMotor = 0;     // tempo restante (em centésimos) até o próximo controle de tempo
-long             tempoOponente;      // tempo restante do oponente (útil em caso de troca de lados)
-extern int       ultimaEval;         // última avaliação retornada por Alfabeta
+long             tempoMotor = 0;     // tempo restante (em centesimos) ate o proximo controle de tempo
+long             tempoOponente;      // tempo restante do oponente (util em caso de troca de lados)
+extern int       ultimaEval;         // ultima avaliacao retornada por Alfabeta
 // flag de debug
 int     Debug = 0;
 int     mostraNo = 0;
 
 
-// versão
+// versao
 float   VERSAO = 1.40;
 
-// protótipos externos
+// prototipos externos
 // init.c
 extern void IniciaTabuleiro(char*, TBoard*, TByte, TByte, TByte);
 extern void IniciaMaskBitBoardUnitario(TBitBoard*);
@@ -37,21 +39,25 @@ extern void InicializaMaskLances();
 extern int  ObtemMelhorLance(int);
 extern int  VerificaRoque(int);
 extern int  VerificaXeque(int);
+extern int  Eval(TBoard*);
 // make.c
 extern void Make(TLance*, TBoard*);
 extern void UnMake(TLance*, TBoard*);
 // busca.c
 extern int  Busca(int, TLance*);
 extern int  Quiescence(int, int, int);
+extern int  Quiescence_debug(int, int, int);
+// bitBoardFunc.c
+extern void setOnebits(void);
 
-// protótipos locais
+// prototipos locais
 void        Saudacao(void);
 void        Fim(int, char*);
 void        LeInput(char*,FILE*);
 int         parseLance(char*,TLance*);
 void        TrocaTempos(void);
 int         AlocaTempo(void);
-// funções para Debug
+// funcoes para Debug
 void        ImprimeListaLances(int, int, TByte);
 void        ImprimeLance(TLance*, int, TByte, int);
 extern void MostraTabuleiro(TBoard*);
@@ -84,14 +90,14 @@ int main(int argc, char* argv[])
   // Imprimindo saudacao       
   Saudacao();                  
                                
-  // Desabilitando buffer de entrada e saída, para interface com Winboard
+  // Desabilitando buffer de entrada e saida, para interface com Winboard
   setbuf (stdout, NULL);       
   setbuf (stdin, NULL);        
-  // Inicializando tabuleiro com posição FEN
+  // Inicializando tabuleiro com posicao FEN
   
   IniciaTabuleiro("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR",ptrTabPrincipal, BRANCAS, (MSK_ROQUEP | MSK_ROQUEG), (MSK_ROQUEP | MSK_ROQUEG));
  
-  // Inicializando máscaras
+  // Inicializando mascaras
   IniciaMaskBitBoardUnitario(&mskBitBoardUnitario[0]);
   InicializaMaskLances();
   setOnebits();  
@@ -112,7 +118,7 @@ int main(int argc, char* argv[])
         ladoMotor = -1;
         continue;
       }
-      // verificando se é hora de abandonar
+      // verificando se e hora de abandonar
       if (ultimaEval < RESIGN_VALUE) {
         if (!ladoMotor)
           printf("0-1 {White resigns}\n");
@@ -127,7 +133,7 @@ int main(int argc, char* argv[])
       printf("move %c%d%c%d%c\n",melhorLance.casaOrigem%8 + 97, (8 - melhorLance.casaOrigem/8),
                                  melhorLance.casaDestino%8 + 97,(8 - melhorLance.casaDestino/8),
                                  simboloPecasPromocao[melhorLance.pecaPromovida]);
-      // verifica possível resultado decorrente do lance realizado pelo motor
+      // verifica possivel resultado decorrente do lance realizado pelo motor
       if (melhorLance.especial & MSK_MATE) {
         if (!ladoMotor)
           printf("1-0 {White mates}\n");
@@ -143,7 +149,7 @@ int main(int argc, char* argv[])
     
     // obtendo e tratando entrada
     LeInput(strInput, stdin);
-		if (!strcmp(strInput, "xboard")) {          // comando de inicialização enviado pelo Winboard ao início
+		if (!strcmp(strInput, "xboard")) {          // comando de inicializacao enviado pelo Winboard ao inicio
 		  continue;
 		} else if (!strncmp(strInput, "protover", 8)) { // comando indicando versao do protocolo e solicitando features
 		  printf("feature ping=0 setboard=1 san=0 usermove=1 time=1 draw=1 sigint=0 sigterm=0 reuse=0 analyze=0 myname=\"ICE v%01.02f\" variants=\"normal\" colors=0 name=0\n",VERSAO);
@@ -151,7 +157,7 @@ int main(int argc, char* argv[])
 		} else if (!strncmp(strInput, "accepted", 8) || // features aceitas com sucesso 
 		           strInput[0] == 0                  || // enviado eventualmente - deve ser ignorado
 		          !strcmp(strInput, "random")        || // comando especifico para o GNUChess 4 - ignorado
-              !strcmp(strInput, "computer")      || // winboard avisando que o jogo será contra outra engine
+              !strcmp(strInput, "computer")      || // winboard avisando que o jogo sera contra outra engine
 		          !strcmp(strInput, "?")    ) {         // comando "move now", ignorado nesta parte   
 			continue;    
 		} else if (!strcmp(strInput, "quit") ||
@@ -165,14 +171,14 @@ int main(int argc, char* argv[])
 		} else if (!strncmp(strInput, "level", 5)) { // recebe controle de tempo
 			sscanf(strInput+6,"%d",&controleTempo);
 			if (!controleTempo)                        // recebe incremento
-			  sscanf(strInput+8,"%d %d",&tempoMotor,&incrementoTempo);
+			  sscanf(strInput+8,"%ld %d",&tempoMotor,&incrementoTempo);
 		} else if (!strncmp(strInput, "time", 4)) { // recebe tempo total restante do motor (em centesimos)
-			sscanf(strInput+5,"%d",&tempoMotor);
+			sscanf(strInput+5,"%ld",&tempoMotor);
 		} else if (!strncmp(strInput, "otim", 4)) { // recebe tempo total restante do motor (em centesimos)
-			sscanf(strInput+5,"%d",&tempoOponente);
-		} else if (!strcmp(strInput, "force")) {    // entra em modo "espectador", isto é, não joga para nenhum lado
+			sscanf(strInput+5,"%ld",&tempoOponente);
+		} else if (!strcmp(strInput, "force")) {    // entra em modo "espectador", isto e, nao joga para nenhum lado
 			ladoMotor = -1; 
-		} else if (!strncmp(strInput, "result", 6)) { // a partida acabou o winboard está informando o resultado
+		} else if (!strncmp(strInput, "result", 6)) { // a partida acabou o winboard esta informando o resultado
 			ladoMotor = -1;
 		} else if (!strcmp(strInput, "post")) {     // imprime pv
 			post = 1; 
@@ -184,27 +190,27 @@ int main(int argc, char* argv[])
       UnMake(&listaLancesJogados[indListaLancesJogados-1], ptrTabPrincipal);
       UnMake(&listaLancesJogados[indListaLancesJogados-1], ptrTabPrincipal);      
 		} else if (!strncmp(strInput, "setboard", 8)) {  // inicializa tabuleiro com string FEN
-		  // obtem string com posição
+		  // obtem string com posicao
 		  for (posFEN=0;strInput[posFEN+9] != 32;posFEN++);
 		  strncpy(initFEN, strInput+9, posFEN); initFEN[posFEN] = '\0';
 		  // obtem lado a jogar
 		  if (strInput[posFEN+10] == 98) ladoFEN = NEGRAS; else ladoFEN = BRANCAS;
 			IniciaTabuleiro(initFEN, ptrTabPrincipal, ladoFEN, (MSK_ROQUEP | MSK_ROQUEG), (MSK_ROQUEP | MSK_ROQUEG));
 			ladoMotor = ladoFEN^1;
-		} else if (!strcmp(strInput, "playother")) { // define que o motor jogará pelo lado que não está na vez
+		} else if (!strcmp(strInput, "playother")) { // define que o motor jogara pelo lado que nao esta na vez
 		  ladoMotor = (tabPrincipal.vez ? NEGRAS : BRANCAS);
 		  TrocaTempos();
-		} else if (!strcmp(strInput, "white")) {     // define que o jogador (oponente) jogará pelas brancas
+		} else if (!strcmp(strInput, "white")) {     // define que o jogador (oponente) jogara pelas brancas
 		  if (ladoMotor != NEGRAS) {
 			  ladoMotor = NEGRAS;
 			  TrocaTempos();
 			}
-		} else if (!strcmp(strInput, "black")) {    // define que o jogador (oponente) jogará pelas brancas
+		} else if (!strcmp(strInput, "black")) {    // define que o jogador (oponente) jogara pelas brancas
 		  if (ladoMotor != BRANCAS) {
 			  ladoMotor = BRANCAS;
 			  TrocaTempos();
 			}
-		} else if (!strcmp(strInput, "go")) {       // faz o motor começar a pensar pelo lado da vez
+		} else if (!strcmp(strInput, "go")) {       // faz o motor comecar a pensar pelo lado da vez
 			ladoMotor = ptrTabPrincipal->vez;
 		} else if (!strcmp(strInput, "d") || 
 		           !strcmp(strInput, "diagrama")) { // imprime o tabuleiro atual na tela
@@ -221,17 +227,17 @@ int main(int argc, char* argv[])
 		  GeraListaLances(0, MSK_GERA_TODOS, 0, 0);
       ImprimeListaLances(0,tabPrincipal.numLance,tabPrincipal.vez);
     } else if (!strcmp(strInput, "testegen")) {     
-      printf("Testando geração de lances (10k iterações):\n");
+      printf("Testando geracao de lances (10k iteracoes):\n");
       ticks1 = clock();
       for (i=0;i<10000;i++) 
         GeraListaLances(0, MSK_GERA_TODOS, 0, 0);
       ticks2 = clock();      
-      printf("Todos os lances: %d clock ticks.\n",(long)(ticks2 - ticks1));
+      printf("Todos os lances: %ld clock ticks.\n",(long)(ticks2 - ticks1));
       ticks1 = clock();
       for (i=0;i<10000;i++) 
         GeraListaLances(0, MSK_QUIESCENCE, 200, 14);
       ticks2 = clock();      
-      printf("Quiescence: %d clock ticks.\n",(long)(ticks2 - ticks1));      
+      printf("Quiescence: %ld clock ticks.\n",(long)(ticks2 - ticks1));      
 		} else if (!strcmp(strInput, "genQ")) {
 		  GeraListaLances(0, MSK_QUIESCENCE, 200, 14);
       ImprimeListaLances(0,tabPrincipal.numLance,tabPrincipal.vez);
@@ -277,13 +283,13 @@ int main(int argc, char* argv[])
 // Imprime Saudacao
 void Saudacao(void) {
   printf("ICE v%01.02f\n",VERSAO);
-  printf("Motor de Xadrez por Iury Lazosky, Cyntia Morais e Eduardo Waghabi\n");
+  printf("Motor de Xadrez por Eduardo Waghabi\n");
   if (Debug) printf("Debug ON\n");
 }
 
 // ----------------------------------------------------------------------
 // Fim()
-// Finaliza programa com código de retorno especificado, após imprimir mensagem
+// Finaliza programa com codigo de retorno especificado, apos imprimir mensagem
 void Fim(int RC, char* msg) {
   printf("%s\n",msg);
   exit(RC);
@@ -315,12 +321,12 @@ int parseLance(char *strInput, TLance *lance) {
       strInput[1] < 49 || strInput[1] > 56  ||
       strInput[2] < 97 || strInput[2] > 104 ||
       strInput[3] < 49 || strInput[3] > 56)
-    return 2; // não é um lance
+    return 2; // nao e um lance
 
   // inicializando lance
   lance->peca = lance->casaOrigem = lance->casaDestino = lance->pecaPromovida = lance->pecaCapturada = lance->valorLance = lance->especial = 0;
 
-  // obtendo informações do lance 
+  // obtendo informacoes do lance 
   colunaOrigem  = strInput[0];
   linhaOrigem   = strInput[1];
   colunaDestino = strInput[2];
@@ -331,7 +337,7 @@ int parseLance(char *strInput, TLance *lance) {
   lance->casaOrigem  = 63 - ((linhaOrigem  - 49)* 8) + colunaOrigem  - 104;
   lance->casaDestino = 63 - ((linhaDestino - 49)* 8) + colunaDestino - 104;
   
-  // identifica se uma peça esta sendo promovida
+  // identifica se uma peca esta sendo promovida
   switch (pecaPromovida) {
       case 113 : lance->pecaPromovida = DAMA;   break;
       case 114 : lance->pecaPromovida = TORRE;  break;
@@ -340,11 +346,11 @@ int parseLance(char *strInput, TLance *lance) {
       default  : lance->pecaPromovida = 0;      break;
   }
   
-  // verifica se a casa de destino esta ocupada por uma peça do mesmo bando (lance ilegal)
+  // verifica se a casa de destino esta ocupada por uma peca do mesmo bando (lance ilegal)
   if (tabPrincipal.pecas[tabPrincipal.vez]     & mskBitBoardUnitario[lance->casaDestino])
     return 1;
 
-  // identifica qual peça está sendo movida
+  // identifica qual peca esta sendo movida
   if (tabPrincipal.pecas[tabPrincipal.vez]     & mskBitBoardUnitario[lance->casaOrigem]) {
     if (tabPrincipal.peoes[tabPrincipal.vez]   & mskBitBoardUnitario[lance->casaOrigem])
        lance->peca = PEAO;
@@ -358,9 +364,9 @@ int parseLance(char *strInput, TLance *lance) {
        lance->peca = DAMA;
     if (tabPrincipal.rei[tabPrincipal.vez]     & mskBitBoardUnitario[lance->casaOrigem])
        lance->peca = REI;
-  } else return 3;   // casa de origem não possui peças do bando da vez (lance ilegal)
+  } else return 3;   // casa de origem nao possui pecas do bando da vez (lance ilegal)
   
-  // identifica se promocao foi correta, ou se era necessária
+  // identifica se promocao foi correta, ou se era necessaria
   if (tabPrincipal.vez == BRANCAS) {
     if ((lance->pecaPromovida && lance->peca != PEAO) || (lance->pecaPromovida && lance->casaDestino > 7))
       return 4; // promocao incorreta
@@ -466,14 +472,16 @@ int AlocaTempo(void) {
   int lancesAteControle = (controleTempo - (tabPrincipal.numLance - 1)%controleTempo);
 
   if (controleTempo) {
-    tempoAlocado = abs((tempoMotor - 50) / lancesAteControle);
+    tempoAlocado = labs((tempoMotor - 50) / lancesAteControle);
   } else {
     if (incrementoTempo)
       tempoAlocado += (incrementoTempo * 100) - 50;
     else 
       tempoAlocado = tempoMotor / 30;
   }
-    
+  
+  if (tempoAlocado <= 0)
+    tempoAlocado = 100; // garante algum tempo minimo para evitar time-out imediato
 
   return tempoAlocado;
 }

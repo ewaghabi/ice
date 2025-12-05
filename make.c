@@ -24,8 +24,7 @@ void UnMake(TLance*, TBoard*);
 
 void Make(TLance* lance, TBoard* tab) {
   
-  TByte pecaDest;
-  int   i, casaEnPassant;
+  int   casaEnPassant;
  
   // removendo peça da casa de origem
   switch (lance->peca) {
@@ -104,8 +103,7 @@ void Make(TLance* lance, TBoard* tab) {
 
 void UnMake(TLance* lance, TBoard* tab) {
   
-  TByte pecaDest;
-  int   i, casaEnPassant;
+  int   casaEnPassant;
 
   // se foi uma captura, recoloca a peca do adversário
   switch (lance->pecaCapturada) {

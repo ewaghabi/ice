@@ -1,7 +1,8 @@
 // ----------------------------------------------------------------
 // busca.c
-// Funções de busca
+// Funcoes de busca
 #include "ice.h"
+#include <stdio.h>
 #include <time.h>
 
 // globais externas
@@ -12,25 +13,25 @@ extern int              post;
 extern int              ladoMotor;
 
 // globais locais
-clock_t               ticks1, ticks2;            // variáveis para medição do tempo com função clock() (time.h)
-int                   qtdCentesimos;             // total de tempo destinado à busca 
-long                  qtdNos;                    // número de nós pesquisados
-long                  qtdNos2;                   // qtd nós para calculo de branch factor
-int                   flagRetorno;               // flag para comunicação entre nós
-int                   flagLanceImpossivel;       // flag para comunicação entre nós
-int                   flagTimeOut;               // flag para comunicação entre nós
+clock_t               ticks1, ticks2;            // variaveis para medicao do tempo com funcao clock() (time.h)
+int                   qtdCentesimos;             // total de tempo destinado a busca 
+long                  qtdNos;                    // numero de nos pesquisados
+long                  qtdNos2;                   // qtd nos para calculo de branch factor
+int                   flagRetorno;               // flag para comunicacao entre nos
+int                   flagLanceImpossivel;       // flag para comunicacao entre nos
+int                   flagTimeOut;               // flag para comunicacao entre nos
 int                   maxProfundidade;           // profundidade original 
 int                   ultimaEval = 0;            // retorno do AlfaBeta: valor da posicao
-int                   ultimoKiller = 0;          // último killer move substituido 
+int                   ultimoKiller = 0;          // ultimo killer move substituido 
 TLance                killerMoves[MAX_DEPTH][2]; // dois slots para killer moves (por profundidade)
 
-// variáveis para debugação
+// variaveis para debugacao
 long                    noDebug = -1; //16990; //-1; //= 18050; //-1; // 3898;
 int                     numLanceDebug = -1;
 extern int              Debug;
 extern int              mostraNo;
 
-// protótipos externos
+// prototipos externos
 // geraLances.c
 extern int  GeraListaLances(int, int, int, int);
 extern void InicializaMaskLances();
@@ -40,13 +41,15 @@ extern void Make(TLance*, TBoard*);
 extern void UnMake(TLance*, TBoard*);
 // eval.c
 extern int  Eval(TBoard*);
+extern int  VerificaXeque(int);
 
 // Debug
 extern void MostraTabuleiro(TBoard*);
 extern void MostraBitBoard(TBitBoard);
 extern void ImprimeListaLances(int, int, TByte);
+extern void ImprimeLance(TLance*, int, TByte, int);
 
-// protótipos locais
+// prototipos locais
 int   Busca(int, TLance*);
 int   AlphaBeta(int, int, int, TPv*);
 int   Quiescence(int, int, int);
@@ -64,7 +67,7 @@ int Busca(int tempoBusca, TLance* lance) {
   int     i, profundidade, retorno, eval;
   TPv     pv;
   
-  qtdNos = qtdNos2 = 0;                  // inicializa o contador de nós e o tempo
+  qtdNos = qtdNos2 = 0;                  // inicializa o contador de nos e o tempo
   InicializaTempoBusca(tempoBusca);      // inicializa tempo
   InicializaKillerMoves();               // inicializa vetor de killer moves
   ticks1 = clock();                      // inicializa contador de tempo
@@ -72,11 +75,11 @@ int Busca(int tempoBusca, TLance* lance) {
   // iterative deepening
   for (profundidade = 2; profundidade < MAX_DEPTH; profundidade++) {
     maxProfundidade = profundidade;        // marca a maior profundidade a ser pesquisada, para indexar a lista de lances
-    flagRetorno = flagLanceImpossivel = 0; // flags de comunicação entre os nós
+    flagRetorno = flagLanceImpossivel = 0; // flags de comunicacao entre os nos
     flagTimeOut = 0;
     
-    // realiza a busca com janela inicial maior possível
-    // note que a variante principal é re-enviada à busca para auxiliar a ordenação de lances
+    // realiza a busca com janela inicial maior possivel
+    // note que a variante principal e re-enviada a busca para auxiliar a ordenacao de lances
     eval = AlphaBeta(profundidade, -INFINITO, +INFINITO, &pv);  
     // eval = AlphaBeta_debug(profundidade, -INFINITO, +INFINITO, &pv);  
 
@@ -87,7 +90,7 @@ int Busca(int tempoBusca, TLance* lance) {
         if (pv.lances[i].especial & (MSK_MATE | MSK_AFOGADO)) retorno = pv.lances[i].especial;
     
     // verifica se tempo se esgotou ou a linha possui empate ou mate,
-    // ou tempo restante é menor do que o utilizado para a última profundidade <- isto deve ser revisto em caso de null-move
+    // ou tempo restante e menor do que o utilizado para a ultima profundidade <- isto deve ser revisto em caso de null-move
     if (flagTimeOut || ((retorno | flagRetorno) & (MSK_MATE | MSK_AFOGADO))) {
         
         if (!flagTimeOut)
@@ -98,12 +101,13 @@ int Busca(int tempoBusca, TLance* lance) {
           ImprimePV(&pv, ultimaEval, maxProfundidade);                   // imprime PV final
         }
       
-      // retorna possível resultado 
+      // retorna possivel resultado 
       return flagRetorno;
     }
     ultimaEval = eval;
     ImprimePV(&pv, ultimaEval, profundidade);                         // imprime PV ao final de cada profundidade
   }
+  return flagRetorno;
 }
 
 // ------------------------------------------------------
@@ -115,7 +119,7 @@ int AlphaBeta(int profundidade, int alpha, int beta, TPv *pv) {
 
     // estabelece o ply
     ply = maxProfundidade - profundidade;
-    // conta nós
+    // conta nos
     qtdNos++;
     
     // verifica final de busca, e chama Quiescence
@@ -129,9 +133,9 @@ int AlphaBeta(int profundidade, int alpha, int beta, TPv *pv) {
       if (VerificaFimTempoBusca()) 
         return alpha;
 
-    // verifica se está em xeque
+    // verifica se esta em xeque
     flagXeque = VerificaXeque(tabPrincipal.vez);
-    // extensão de busca para xeque = 1 ply
+    // extensao de busca para xeque = 1 ply
 //    if (flagXeque) profundidade++;
     
     // gera lances, verificando se houve captura do rei (a posicao eh ilegal)
@@ -143,14 +147,14 @@ int AlphaBeta(int profundidade, int alpha, int beta, TPv *pv) {
     qtdLancesPossiveis = 0;
     while ((indLanceLista = ObtemMelhorLance(ply, &pv->lances[ply])) != -1) { // obtem lances um a um, o pv primeiro
       Make(&listaLances[indLanceLista], &tabPrincipal);                    // faz o lance no tabuleiro principal
-      flagLanceImpossivel = flagRetorno = 0;                               // inicializa flags de comunicação
+      flagLanceImpossivel = flagRetorno = 0;                               // inicializa flags de comunicacao
       valor = -AlphaBeta(profundidade - 1, -beta, -alpha, &pvTemp);        // pesquisa
       UnMake(&listaLances[indLanceLista], &tabPrincipal);                  // desfaz o lance no tabuleiro principal
       
-      // testa flags de comunicação
+      // testa flags de comunicacao
       if (flagTimeOut)            // verifica time-out
         return alpha;      
-      if (flagLanceImpossivel) { // verifica lance impossível
+      if (flagLanceImpossivel) { // verifica lance impossivel
         flagLanceImpossivel = 0;
         continue;
       }
@@ -229,11 +233,11 @@ void ImprimePV(TPv* pv, int score, int ply) {
   int i, numLance, vez, primLance;
   long tempo;
   
-  // obtendo o tempo decorrido até agora
+  // obtendo o tempo decorrido ate agora
   if (post) {
     ticks2 = clock();
     tempo = (ticks2 - ticks1)/(CLOCKS_PER_SEC/100);
-    printf("%2d %4d %5d %7d ",ply,score,tempo,qtdNos); 
+    printf("%2d %4d %5ld %7ld ",ply,score,tempo,qtdNos); 
     
     vez       = tabPrincipal.vez;
     numLance  = tabPrincipal.numLance;
@@ -263,10 +267,10 @@ void ImprimePV(TPv* pv, int score, int ply) {
 // Quiescence()
 int Quiescence(int alpha, int beta, int ply) {
     TPv pv;
-    int valor, indLanceLista, i;
+    int valor, indLanceLista;
 
     valor = Eval(&tabPrincipal);
-    // conta nós    
+    // conta nos    
     qtdNos++;
 
     if (valor >= beta) return beta;
@@ -281,11 +285,11 @@ int Quiescence(int alpha, int beta, int ply) {
     pv.lances[0].casaDestino = pv.lances[0].casaOrigem = 0;                // inutilizando pv, para evitar escolha em ObtemMelhorLance
     while ((indLanceLista = ObtemMelhorLance(ply, &pv.lances[0])) != -1) { // obtem lances um a um
       Make(&listaLances[indLanceLista], &tabPrincipal);                    // faz o lance no tabuleiro principal
-      flagLanceImpossivel = flagRetorno = 0;                               // inicializa flags de comunicação
+      flagLanceImpossivel = flagRetorno = 0;                               // inicializa flags de comunicacao
       valor = -Quiescence(-beta, -alpha, ply+1);                           // pesquisa
       UnMake(&listaLances[indLanceLista], &tabPrincipal);                  // desfaz o lance no tabuleiro principal
 
-      // testa flags de comunicação
+      // testa flags de comunicacao
       if (flagLanceImpossivel) {
         flagLanceImpossivel = 0;
         continue;
@@ -300,8 +304,8 @@ int Quiescence(int alpha, int beta, int ply) {
 
 // ------------------------------------------------------------
 // AtualizaKillerMoves
-// retorno 1: lance já existente, valor incrementado
-// retorno 0: lance não existente, incluído no primeiro slot vazio ou de menor valor
+// retorno 1: lance ja existente, valor incrementado
+// retorno 0: lance nao existente, incluido no primeiro slot vazio ou de menor valor
 int  AtualizaKillerMoves(TLance* lance, int ply) {
   int slot = 0;
   
@@ -358,7 +362,7 @@ void  InicializaKillerMoves() {
 // VerificaFimTempoBusca()
 int   VerificaFimTempoBusca() {
   flagTimeOut = 0;
-  if ((clock() - ticks1)/(CLOCKS_PER_SEC/100) >= qtdCentesimos) 
+  if ((long)((clock() - ticks1)/(CLOCKS_PER_SEC/100)) >= (long)qtdCentesimos) 
     flagTimeOut = 1;
 
   return flagTimeOut;
@@ -367,7 +371,7 @@ int   VerificaFimTempoBusca() {
 // ***********************************************************************************
 
 // -----------------------------------------------------------
-// Alfabeta com instruções de debugação
+// Alfabeta com instrucoes de debugacao
 int AlphaBeta_debug(int profundidade, int alpha, int beta, TPv *pv) {
     int indLanceLista, i, flagXeque = 0;
     int valor, ply, qtdLancesPossiveis;
@@ -375,14 +379,14 @@ int AlphaBeta_debug(int profundidade, int alpha, int beta, TPv *pv) {
 
     // estabelece o ply
     ply = maxProfundidade - profundidade;
-    // conta nós
+    // conta nos
     qtdNos++;
 
    
     if (profundidade == 0) {
 /*      if (Debug) {
         for(i=0;i<=ply;i++) printf(" * ");
-        printf(" Saindo do AlphaBeta - avaliação: %02.02f\n",(float)Quiescence(-INFINITO, +INFINITO, ply)/100);
+        printf(" Saindo do AlphaBeta - avaliacao: %02.02f\n",(float)Quiescence(-INFINITO, +INFINITO, ply)/100);
       }       */
       pv->numLances = 0;
       return Quiescence(-INFINITO, +INFINITO, ply);      
@@ -398,11 +402,11 @@ int AlphaBeta_debug(int profundidade, int alpha, int beta, TPv *pv) {
     // liga-desliga Debug para o no especificado
     if (qtdNos == noDebug) Debug = 1; // else Debug = 0;
 
-    // verifica se está em xeque
+    // verifica se esta em xeque
     flagXeque = VerificaXeque(tabPrincipal.vez);
     if (Debug && flagXeque) {
       for(i=0;i<=ply;i++) printf(" * ");
-      printf(" Lado a jogar está em xeque!\n");
+      printf(" Lado a jogar esta em xeque!\n");
     }
 
     // gera lances, verificando se houve captura do rei (a posicao eh ilegal)
@@ -431,17 +435,17 @@ int AlphaBeta_debug(int profundidade, int alpha, int beta, TPv *pv) {
       }
       
       Make(&listaLances[indLanceLista], &tabPrincipal);              // faz o lance no tabuleiro principal
-      flagLanceImpossivel = flagRetorno = 0;                         // inicializa flags de comunicação
+      flagLanceImpossivel = flagRetorno = 0;                         // inicializa flags de comunicacao
       valor = -AlphaBeta_debug(profundidade - 1, -beta, -alpha, &pvTemp);  // pesquisa
       UnMake(&listaLances[indLanceLista], &tabPrincipal);            // desfaz o lance no tabuleiro principal
       
-      // testa flags de comunicação
+      // testa flags de comunicacao
       if (flagLanceImpossivel) { 
         if (Debug) {
           for(i=0;i<=ply;i++) printf(" * ");
           printf(" ");
           ImprimeLance(&listaLances[indLanceLista],tabPrincipal.numLance,tabPrincipal.vez,1);
-          printf(" é Impossivel. Obtendo proximo lance...\n");
+          printf(" e Impossivel. Obtendo proximo lance...\n");
         } 
         flagLanceImpossivel = 0;
         continue;
@@ -554,7 +558,7 @@ int Quiescence_debug(int alpha, int beta, int ply) {
     if (GeraListaLances(ply, MSK_QUIESCENCE, valor, 0)) {
       if (Debug) {
         for(i=0;i<=ply;i++) printf(" * ");
-        printf(" Detectado lance impossível!\n",valor);
+        printf(" Detectado lance impossivel!\n");
       } 
       flagLanceImpossivel = 1;
       return 0;
@@ -575,15 +579,15 @@ int Quiescence_debug(int alpha, int beta, int ply) {
         printf("\n");
       }
       Make(&listaLances[indLanceLista], &tabPrincipal);                    // faz o lance no tabuleiro principal
-      flagLanceImpossivel = flagRetorno = 0;                               // inicializa flags de comunicação
+      flagLanceImpossivel = flagRetorno = 0;                               // inicializa flags de comunicacao
       valor = -Quiescence(-beta, -alpha, ply+1);                           // pesquisa
       UnMake(&listaLances[indLanceLista], &tabPrincipal);                  // desfaz o lance no tabuleiro principal
 
-      // testa flags de comunicação
+      // testa flags de comunicacao
       if (flagLanceImpossivel) {
         if (Debug) {
           for(i=0;i<=ply;i++) printf(" * ");
-          printf(" Lance é impossível!\n",valor);
+          printf(" Lance e impossivel!\n");
         } 
         flagLanceImpossivel = 0;
         continue;
